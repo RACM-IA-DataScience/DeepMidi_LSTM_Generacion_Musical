@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notas cayendo en pentagrama — mi composición generada</title>
+<style>
+  body { margin: 0; background: #0f1420; color: #e8ecf3; font-family: system-ui, sans-serif; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 4px 0 2px; }
+  p.sub { color: #9fb0c8; margin: 0 0 12px; font-size: 14px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+  button, select { background: #1d2a44; color: #e8ecf3; border: 1px solid #3a4a63;
+    border-radius: 8px; padding: 8px 14px; font-size: 15px; cursor: pointer; }
+  button.primary { background: #f2b705; color: #231a00; border-color: #f2b705; font-weight: 700; }
+  button.active { outline: 2px solid #f2b705; }
+  input[type=range] { flex: 1; min-width: 160px; accent-color: #f2b705; }
+  .time { font-variant-numeric: tabular-nums; color: #9fb0c8; font-size: 14px; }
+  .now-note { display: flex; align-items: baseline; gap: 12px; background: #16213a;
+    border: 1px solid #3a4a63; border-radius: 10px; padding: 10px 14px; margin-bottom: 10px; }
+  .now-note .label { color: #9fb0c8; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; }
+  .now-note .note { font-size: 34px; font-weight: 800; color: #f2b705; min-width: 120px; }
+  .now-note .freq { color: #9fb0c8; font-size: 14px; }
+  canvas { width: 100%; height: 560px; display: block; background: #0b101c;
+    border: 1px solid #26324a; border-radius: 12px; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin: 10px 0; font-size: 13px; color: #c6d2e4; }
+  .dot { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  .howto { background: #131c2e; border: 1px solid #26324a; border-radius: 12px; padding: 14px 18px; font-size: 14px; line-height: 1.6; }
+  .howto h2 { font-size: 16px; margin: 0 0 6px; }
+  .howto li { margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Notas cayendo en pentagrama — mi composición generada</h1>
+  <p class="sub">Mi composición generada por el LSTM, con las notas cayendo en el pentagrama. La nota que suena es siempre la que cruza la línea dorada.</p>
+
+  <div class="controls">
+    <button id="btnGenerada" class="active">Mi composición generada</button>
+    <button id="btnPlay" class="primary">▶ Reproducir</button>
+    <button id="btnRestart">↺ Reiniciar</button>
+    <select id="selSpeed">
+      <option value="0.5">0.5× lento</option>
+      <option value="1" selected>1× normal</option>
+      <option value="1.5">1.5× rápido</option>
+    </select>
+    <input id="seek" type="range" min="0" max="100" step="0.1" value="0">
+    <span class="time" id="timeLabel">0:00 / 0:00</span>
+  </div>
+
+  <div class="now-note">
+    <span class="label">Nota sonando</span>
+    <span class="note" id="nowNote">—</span>
+    <span class="freq" id="nowFreq"></span>
+  </div>
+
+  <canvas id="stage"></canvas>
+
+  <div class="legend">
+    <span><span class="dot" style="background:#6f8fb5"></span>Nota futura (aún no suena)</span>
+    <span><span class="dot" style="background:#f2b705"></span>Nota sonando ahora</span>
+    <span><span class="dot" style="background:#556070"></span>Nota pasada (se desvanece)</span>
+  </div>
+
+  <div class="howto">
+    <h2>Cómo funciona esta animación</h2>
+    <ol>
+      <li><b>La altura de la nota es su posición horizontal.</b> Cada nota cae por la columna de su altura en el pentagrama: a la derecha las agudas, a la izquierda las graves. Las cinco líneas gruesas son las del pentagrama de sol (Mi, Sol, Si, Re, Fa).</li>
+      <li><b>El tiempo es la caída.</b> Las notas bajan a velocidad constante y el largo de cada barra es su duración: una nota larga es una barra larga.</li>
+      <li><b>Solo suena lo que cruza la línea dorada «AHORA».</b> La nota se ilumina en dorado, se escribe su nombre (Do, Re, Mi…) y suena justo cuando su cabeza toca la línea. Las futuras se ven tenues arriba y las pasadas se desvanecen abajo, así nunca se confunden.</li>
+      <li><b>El sonido sale de Web Audio:</b> cada nota es un oscilador con la frecuencia de su MIDI (440 × 2^((m−69)/12)) y una envolvente de ataque y caída, sin archivos de audio.</li>
+    </ol>
+  </div>
+</div>
+
+<script>
+const SONGS = {"generada": {"notes": [{"s": 0.0, "e": 2.03, "p": 51, "v": 47}, {"s": 0.0, "e": 1.768, "p": 58, "v": 43}, {"s": 0.0, "e": 1.637, "p": 54, "v": 35}, {"s": 0.0, "e": 1.965, "p": 61, "v": 47}, {"s": 0.0, "e": 2.03, "p": 65, "v": 51}, {"s": 2.096, "e": 2.685, "p": 56, "v": 39}, {"s": 2.096, "e": 3.864, "p": 53, "v": 55}, {"s": 2.096, "e": 2.947, "p": 63, "v": 55}, {"s": 2.096, "e": 3.798, "p": 69, "v": 63}, {"s": 2.096, "e": 3.929, "p": 59, "v": 67}, {"s": 2.096, "e": 2.882, "p": 63, "v": 31}, {"s": 2.096, "e": 3.144, "p": 57, "v": 55}, {"s": 2.62, "e": 2.816, "p": 59, "v": 47}, {"s": 2.62, "e": 2.882, "p": 61, "v": 63}, {"s": 3.144, "e": 3.667, "p": 64, "v": 71}, {"s": 3.144, "e": 3.537, "p": 58, "v": 59}, {"s": 3.144, "e": 3.602, "p": 55, "v": 63}, {"s": 3.144, "e": 3.471, "p": 60, "v": 51}, {"s": 4.191, "e": 5.894, "p": 69, "v": 43}, {"s": 4.191, "e": 4.846, "p": 54, "v": 35}, {"s": 4.191, "e": 6.091, "p": 64, "v": 51}, {"s": 4.191, "e": 5.043, "p": 62, "v": 59}, {"s": 4.191, "e": 5.894, "p": 63, "v": 67}, {"s": 4.191, "e": 5.305, "p": 63, "v": 55}, {"s": 4.191, "e": 4.781, "p": 54, "v": 39}, {"s": 4.453, "e": 4.584, "p": 71, "v": 55}, {"s": 4.453, "e": 4.584, "p": 69, "v": 63}, {"s": 4.453, "e": 4.519, "p": 66, "v": 51}, {"s": 5.239, "e": 6.025, "p": 59, "v": 55}, {"s": 5.239, "e": 5.894, "p": 61, "v": 55}, {"s": 5.239, "e": 5.96, "p": 56, "v": 51}, {"s": 5.239, "e": 6.091, "p": 52, "v": 23}, {"s": 5.239, "e": 5.501, "p": 61, "v": 47}, {"s": 6.287, "e": 6.746, "p": 64, "v": 39}, {"s": 6.287, "e": 6.68, "p": 68, "v": 59}, {"s": 6.287, "e": 6.68, "p": 64, "v": 27}, {"s": 6.287, "e": 6.615, "p": 57, "v": 55}, {"s": 6.549, "e": 6.877, "p": 71, "v": 51}, {"s": 6.811, "e": 7.073, "p": 57, "v": 31}, {"s": 7.335, "e": 7.728, "p": 69, "v": 59}, {"s": 7.335, "e": 7.531, "p": 59, "v": 67}, {"s": 7.335, "e": 7.531, "p": 64, "v": 75}, {"s": 7.597, "e": 7.728, "p": 71, "v": 43}, {"s": 7.597, "e": 7.728, "p": 73, "v": 47}, {"s": 7.597, "e": 7.662, "p": 77, "v": 19}, {"s": 7.728, "e": 8.317, "p": 73, "v": 39}, {"s": 7.728, "e": 7.793, "p": 61, "v": 51}, {"s": 7.728, "e": 7.99, "p": 77, "v": 39}, {"s": 7.728, "e": 8.383, "p": 56, "v": 55}, {"s": 7.728, "e": 7.924, "p": 54, "v": 71}, {"s": 7.859, "e": 8.121, "p": 59, "v": 63}, {"s": 9.169, "e": 9.3, "p": 68, "v": 63}, {"s": 9.169, "e": 9.234, "p": 64, "v": 47}, {"s": 10.217, "e": 10.282, "p": 59, "v": 51}, {"s": 10.61, "e": 10.74, "p": 52, "v": 39}, {"s": 11.526, "e": 11.985, "p": 56, "v": 55}, {"s": 11.526, "e": 11.788, "p": 61, "v": 55}, {"s": 11.526, "e": 12.05, "p": 66, "v": 35}, {"s": 11.526, "e": 11.919, "p": 73, "v": 59}, {"s": 11.526, "e": 11.985, "p": 54, "v": 67}, {"s": 11.526, "e": 12.116, "p": 57, "v": 43}, {"s": 11.526, "e": 11.985, "p": 64, "v": 51}, {"s": 11.526, "e": 12.443, "p": 54, "v": 67}, {"s": 11.526, "e": 11.854, "p": 68, "v": 55}, {"s": 11.526, "e": 12.05, "p": 66, "v": 67}, {"s": 11.526, "e": 12.312, "p": 52, "v": 23}, {"s": 12.05, "e": 12.378, "p": 48, "v": 47}, {"s": 12.312, "e": 12.378, "p": 67, "v": 39}, {"s": 12.312, "e": 12.378, "p": 63, "v": 43}, {"s": 12.312, "e": 12.378, "p": 59, "v": 27}, {"s": 13.491, "e": 13.622, "p": 52, "v": 31}, {"s": 14.146, "e": 14.342, "p": 61, "v": 51}, {"s": 14.408, "e": 14.539, "p": 60, "v": 71}, {"s": 14.408, "e": 14.539, "p": 66, "v": 35}, {"s": 14.67, "e": 15.128, "p": 64, "v": 39}, {"s": 14.67, "e": 15.259, "p": 57, "v": 43}, {"s": 14.67, "e": 15.325, "p": 52, "v": 47}, {"s": 14.67, "e": 15.456, "p": 56, "v": 43}, {"s": 16.766, "e": 18.468, "p": 69, "v": 27}, {"s": 16.766, "e": 17.355, "p": 64, "v": 63}, {"s": 16.766, "e": 17.29, "p": 50, "v": 67}, {"s": 16.766, "e": 17.552, "p": 62, "v": 39}, {"s": 16.766, "e": 18.665, "p": 57, "v": 27}, {"s": 16.766, "e": 17.355, "p": 53, "v": 43}, {"s": 17.552, "e": 17.617, "p": 66, "v": 31}, {"s": 17.813, "e": 19.647, "p": 54, "v": 47}, {"s": 17.813, "e": 18.206, "p": 59, "v": 59}, {"s": 17.813, "e": 18.206, "p": 58, "v": 55}, {"s": 17.813, "e": 18.141, "p": 66, "v": 19}, {"s": 17.813, "e": 19.582, "p": 64, "v": 59}, {"s": 17.813, "e": 18.337, "p": 68, "v": 59}, {"s": 17.813, "e": 18.403, "p": 56, "v": 39}, {"s": 17.813, "e": 18.272, "p": 56, "v": 27}, {"s": 18.337, "e": 18.468, "p": 71, "v": 43}, {"s": 20.695, "e": 20.826, "p": 73, "v": 63}, {"s": 20.695, "e": 20.761, "p": 59, "v": 51}, {"s": 20.695, "e": 20.826, "p": 82, "v": 55}, {"s": 20.695, "e": 20.826, "p": 76, "v": 47}, {"s": 20.957, "e": 21.35, "p": 64, "v": 35}, {"s": 20.957, "e": 21.743, "p": 55, "v": 31}, {"s": 20.957, "e": 21.219, "p": 52, "v": 59}, {"s": 22.005, "e": 22.332, "p": 54, "v": 23}, {"s": 22.005, "e": 22.463, "p": 61, "v": 39}, {"s": 22.005, "e": 22.594, "p": 71, "v": 67}, {"s": 22.005, "e": 22.66, "p": 59, "v": 63}, {"s": 22.005, "e": 22.529, "p": 57, "v": 63}, {"s": 22.791, "e": 22.856, "p": 68, "v": 55}, {"s": 22.791, "e": 22.922, "p": 47, "v": 51}, {"s": 23.053, "e": 23.446, "p": 61, "v": 55}, {"s": 23.053, "e": 23.577, "p": 64, "v": 79}, {"s": 23.053, "e": 25.083, "p": 63, "v": 59}, {"s": 23.053, "e": 23.773, "p": 64, "v": 31}, {"s": 23.053, "e": 23.839, "p": 61, "v": 47}, {"s": 23.053, "e": 23.708, "p": 59, "v": 43}, {"s": 23.315, "e": 23.511, "p": 76, "v": 39}, {"s": 23.577, "e": 23.839, "p": 54, "v": 35}, {"s": 24.101, "e": 24.69, "p": 69, "v": 63}, {"s": 24.101, "e": 24.69, "p": 82, "v": 55}, {"s": 24.101, "e": 24.428, "p": 78, "v": 59}, {"s": 24.101, "e": 24.428, "p": 56, "v": 51}, {"s": 26.458, "e": 26.786, "p": 61, "v": 71}, {"s": 26.458, "e": 26.786, "p": 64, "v": 79}, {"s": 26.458, "e": 26.72, "p": 57, "v": 67}, {"s": 26.458, "e": 26.982, "p": 64, "v": 67}, {"s": 26.982, "e": 27.113, "p": 54, "v": 67}, {"s": 26.982, "e": 27.048, "p": 59, "v": 31}, {"s": 27.113, "e": 27.179, "p": 52, "v": 19}, {"s": 27.244, "e": 27.572, "p": 76, "v": 55}, {"s": 27.244, "e": 27.572, "p": 57, "v": 35}, {"s": 27.244, "e": 27.506, "p": 61, "v": 59}, {"s": 27.244, "e": 27.506, "p": 61, "v": 39}, {"s": 27.244, "e": 27.506, "p": 57, "v": 23}, {"s": 27.244, "e": 27.506, "p": 66, "v": 27}, {"s": 27.768, "e": 28.685, "p": 64, "v": 31}, {"s": 27.768, "e": 28.096, "p": 71, "v": 71}, {"s": 27.768, "e": 28.03, "p": 67, "v": 55}, {"s": 28.03, "e": 28.816, "p": 68, "v": 63}, {"s": 28.03, "e": 28.75, "p": 64, "v": 67}, {"s": 28.03, "e": 28.554, "p": 59, "v": 39}, {"s": 28.554, "e": 28.816, "p": 50, "v": 51}, {"s": 29.209, "e": 29.274, "p": 52, "v": 35}, {"s": 29.34, "e": 29.471, "p": 61, "v": 59}, {"s": 29.34, "e": 29.929, "p": 66, "v": 47}, {"s": 29.34, "e": 29.602, "p": 82, "v": 55}, {"s": 29.34, "e": 29.471, "p": 73, "v": 55}, {"s": 29.34, "e": 29.471, "p": 64, "v": 67}, {"s": 29.864, "e": 30.06, "p": 59, "v": 39}, {"s": 30.126, "e": 30.519, "p": 54, "v": 47}, {"s": 30.126, "e": 30.453, "p": 78, "v": 31}, {"s": 30.126, "e": 30.388, "p": 63, "v": 43}, {"s": 31.174, "e": 31.239, "p": 67, "v": 39}, {"s": 31.174, "e": 31.305, "p": 47, "v": 23}, {"s": 31.436, "e": 31.959, "p": 68, "v": 35}, {"s": 31.436, "e": 32.221, "p": 64, "v": 63}, {"s": 31.436, "e": 33.269, "p": 57, "v": 31}, {"s": 31.436, "e": 32.09, "p": 57, "v": 39}, {"s": 31.436, "e": 32.025, "p": 59, "v": 55}, {"s": 31.436, "e": 32.025, "p": 56, "v": 55}, {"s": 32.483, "e": 33.269, "p": 57, "v": 47}, {"s": 32.483, "e": 32.68, "p": 73, "v": 59}, {"s": 32.483, "e": 32.876, "p": 59, "v": 31}, {"s": 33.269, "e": 33.335, "p": 52, "v": 31}, {"s": 34.055, "e": 34.186, "p": 64, "v": 47}, {"s": 34.055, "e": 34.186, "p": 64, "v": 39}, {"s": 34.055, "e": 34.186, "p": 67, "v": 35}, {"s": 35.496, "e": 36.544, "p": 69, "v": 51}, {"s": 35.496, "e": 35.823, "p": 71, "v": 43}, {"s": 35.496, "e": 35.758, "p": 59, "v": 67}, {"s": 35.496, "e": 36.151, "p": 66, "v": 31}, {"s": 35.496, "e": 36.282, "p": 63, "v": 63}, {"s": 35.627, "e": 36.216, "p": 56, "v": 51}, {"s": 35.627, "e": 36.347, "p": 54, "v": 47}, {"s": 35.627, "e": 37.199, "p": 61, "v": 31}, {"s": 35.627, "e": 36.413, "p": 59, "v": 63}, {"s": 35.627, "e": 36.151, "p": 57, "v": 39}, {"s": 36.675, "e": 36.937, "p": 71, "v": 71}, {"s": 36.675, "e": 37.133, "p": 64, "v": 63}, {"s": 37.199, "e": 37.723, "p": 68, "v": 55}, {"s": 37.461, "e": 37.919, "p": 68, "v": 43}, {"s": 37.461, "e": 37.788, "p": 73, "v": 67}, {"s": 37.461, "e": 37.657, "p": 56, "v": 31}, {"s": 37.461, "e": 37.723, "p": 64, "v": 31}, {"s": 38.247, "e": 38.378, "p": 64, "v": 43}, {"s": 38.247, "e": 38.378, "p": 59, "v": 47}, {"s": 38.247, "e": 38.312, "p": 52, "v": 39}, {"s": 39.032, "e": 39.098, "p": 62, "v": 47}, {"s": 39.294, "e": 39.425, "p": 59, "v": 51}, {"s": 39.294, "e": 39.425, "p": 64, "v": 75}, {"s": 39.818, "e": 40.473, "p": 52, "v": 55}, {"s": 39.818, "e": 40.539, "p": 64, "v": 67}, {"s": 39.818, "e": 40.539, "p": 59, "v": 43}, {"s": 39.818, "e": 41.587, "p": 66, "v": 47}, {"s": 40.866, "e": 41.456, "p": 56, "v": 43}, {"s": 40.866, "e": 41.39, "p": 54, "v": 67}, {"s": 40.866, "e": 41.521, "p": 63, "v": 27}, {"s": 40.866, "e": 41.39, "p": 57, "v": 63}, {"s": 41.914, "e": 42.962, "p": 71, "v": 39}, {"s": 41.914, "e": 43.617, "p": 57, "v": 47}, {"s": 41.914, "e": 42.7, "p": 59, "v": 43}, {"s": 41.914, "e": 42.307, "p": 69, "v": 35}, {"s": 43.748, "e": 43.813, "p": 52, "v": 55}, {"s": 43.748, "e": 43.813, "p": 64, "v": 59}, {"s": 43.748, "e": 44.337, "p": 59, "v": 67}, {"s": 44.01, "e": 44.665, "p": 68, "v": 39}, {"s": 44.01, "e": 45.058, "p": 64, "v": 47}, {"s": 44.01, "e": 44.861, "p": 59, "v": 51}, {"s": 44.01, "e": 44.468, "p": 56, "v": 39}, {"s": 44.534, "e": 44.861, "p": 73, "v": 63}, {"s": 44.534, "e": 44.796, "p": 82, "v": 59}, {"s": 44.534, "e": 44.599, "p": 66, "v": 55}, {"s": 45.058, "e": 45.189, "p": 56, "v": 31}, {"s": 45.058, "e": 45.123, "p": 73, "v": 43}, {"s": 45.058, "e": 45.123, "p": 77, "v": 39}, {"s": 45.058, "e": 45.189, "p": 78, "v": 23}, {"s": 46.105, "e": 46.891, "p": 66, "v": 27}, {"s": 46.105, "e": 46.695, "p": 64, "v": 23}, {"s": 46.105, "e": 46.826, "p": 54, "v": 67}, {"s": 46.105, "e": 47.022, "p": 61, "v": 67}, {"s": 46.105, "e": 46.695, "p": 57, "v": 35}, {"s": 46.629, "e": 46.891, "p": 63, "v": 59}, {"s": 46.629, "e": 46.891, "p": 69, "v": 55}, {"s": 46.629, "e": 46.891, "p": 64, "v": 107}, {"s": 46.891, "e": 47.219, "p": 59, "v": 63}, {"s": 47.153, "e": 47.415, "p": 52, "v": 59}, {"s": 47.153, "e": 47.35, "p": 56, "v": 47}, {"s": 47.153, "e": 47.35, "p": 66, "v": 39}, {"s": 47.153, "e": 47.219, "p": 68, "v": 47}, {"s": 47.153, "e": 48.005, "p": 61, "v": 51}, {"s": 47.153, "e": 47.677, "p": 57, "v": 43}, {"s": 47.153, "e": 47.939, "p": 57, "v": 67}, {"s": 48.201, "e": 49.904, "p": 71, "v": 47}, {"s": 48.201, "e": 48.791, "p": 59, "v": 55}, {"s": 48.201, "e": 48.987, "p": 69, "v": 51}, {"s": 48.201, "e": 49.969, "p": 64, "v": 67}, {"s": 50.035, "e": 50.69, "p": 63, "v": 67}, {"s": 51.345, "e": 53.048, "p": 68, "v": 59}, {"s": 51.345, "e": 52.458, "p": 56, "v": 63}, {"s": 51.345, "e": 52.196, "p": 59, "v": 51}, {"s": 51.345, "e": 53.178, "p": 56, "v": 39}, {"s": 51.345, "e": 53.178, "p": 57, "v": 23}, {"s": 53.44, "e": 55.667, "p": 61, "v": 31}, {"s": 53.44, "e": 55.405, "p": 59, "v": 55}, {"s": 53.44, "e": 54.488, "p": 61, "v": 63}, {"s": 53.44, "e": 54.161, "p": 63, "v": 47}, {"s": 53.44, "e": 55.012, "p": 54, "v": 43}, {"s": 53.44, "e": 53.506, "p": 56, "v": 47}, {"s": 53.44, "e": 54.554, "p": 61, "v": 59}, {"s": 53.44, "e": 53.571, "p": 66, "v": 27}, {"s": 54.488, "e": 55.34, "p": 68, "v": 31}, {"s": 54.488, "e": 55.209, "p": 59, "v": 39}, {"s": 54.488, "e": 54.75, "p": 57, "v": 47}, {"s": 54.488, "e": 54.881, "p": 64, "v": 35}, {"s": 55.012, "e": 55.34, "p": 59, "v": 55}, {"s": 55.274, "e": 55.471, "p": 76, "v": 43}, {"s": 56.322, "e": 56.584, "p": 71, "v": 55}, {"s": 57.632, "e": 58.549, "p": 64, "v": 63}, {"s": 57.632, "e": 58.09, "p": 71, "v": 55}, {"s": 57.632, "e": 58.09, "p": 64, "v": 67}, {"s": 57.632, "e": 58.287, "p": 53, "v": 59}, {"s": 57.632, "e": 58.156, "p": 50, "v": 55}, {"s": 57.632, "e": 58.221, "p": 54, "v": 27}, {"s": 57.632, "e": 59.4, "p": 66, "v": 39}, {"s": 58.68, "e": 59.4, "p": 68, "v": 55}, {"s": 58.68, "e": 60.513, "p": 59, "v": 63}, {"s": 58.68, "e": 60.382, "p": 55, "v": 31}, {"s": 58.68, "e": 60.317, "p": 52, "v": 19}, {"s": 59.204, "e": 59.531, "p": 59, "v": 27}, {"s": 59.204, "e": 59.466, "p": 61, "v": 55}, {"s": 59.204, "e": 59.531, "p": 64, "v": 47}, {"s": 60.513, "e": 60.644, "p": 49, "v": 39}, {"s": 60.644, "e": 60.71, "p": 57, "v": 43}, {"s": 60.972, "e": 61.365, "p": 56, "v": 51}, {"s": 60.972, "e": 61.365, "p": 73, "v": 35}, {"s": 60.972, "e": 61.299, "p": 54, "v": 43}, {"s": 61.299, "e": 61.561, "p": 76, "v": 55}, {"s": 61.823, "e": 62.085, "p": 69, "v": 47}, {"s": 61.823, "e": 62.085, "p": 61, "v": 63}, {"s": 61.823, "e": 62.085, "p": 73, "v": 47}, {"s": 61.823, "e": 62.085, "p": 57, "v": 23}, {"s": 61.823, "e": 62.02, "p": 64, "v": 31}, {"s": 62.609, "e": 62.675, "p": 52, "v": 27}, {"s": 62.871, "e": 63.264, "p": 59, "v": 59}, {"s": 62.871, "e": 63.461, "p": 64, "v": 67}, {"s": 62.871, "e": 63.919, "p": 63, "v": 47}, {"s": 65.491, "e": 66.408, "p": 64, "v": 55}, {"s": 65.491, "e": 67.259, "p": 57, "v": 35}, {"s": 65.491, "e": 66.08, "p": 52, "v": 27}, {"s": 66.015, "e": 66.866, "p": 54, "v": 67}, {"s": 66.015, "e": 66.67, "p": 56, "v": 27}, {"s": 66.015, "e": 68.045, "p": 61, "v": 39}, {"s": 66.015, "e": 67.586, "p": 66, "v": 59}, {"s": 66.015, "e": 67.717, "p": 59, "v": 43}, {"s": 67.063, "e": 67.259, "p": 71, "v": 67}, {"s": 67.063, "e": 67.39, "p": 69, "v": 71}, {"s": 67.063, "e": 67.324, "p": 56, "v": 63}, {"s": 67.063, "e": 67.39, "p": 69, "v": 67}, {"s": 67.063, "e": 67.521, "p": 64, "v": 55}, {"s": 67.848, "e": 67.914, "p": 73, "v": 47}, {"s": 67.848, "e": 67.914, "p": 59, "v": 55}, {"s": 67.848, "e": 67.914, "p": 77, "v": 51}, {"s": 68.896, "e": 69.027, "p": 52, "v": 43}, {"s": 68.896, "e": 68.962, "p": 59, "v": 39}, {"s": 68.896, "e": 68.962, "p": 66, "v": 47}, {"s": 70.206, "e": 71.057, "p": 59, "v": 55}, {"s": 70.206, "e": 70.926, "p": 54, "v": 39}, {"s": 70.206, "e": 72.105, "p": 54, "v": 31}, {"s": 70.206, "e": 70.796, "p": 54, "v": 47}, {"s": 70.206, "e": 71.909, "p": 65, "v": 75}, {"s": 70.206, "e": 72.236, "p": 61, "v": 59}, {"s": 71.778, "e": 72.04, "p": 57, "v": 67}, {"s": 71.778, "e": 72.04, "p": 64, "v": 51}, {"s": 71.778, "e": 72.105, "p": 63, "v": 35}, {"s": 72.04, "e": 72.105, "p": 59, "v": 63}, {"s": 72.04, "e": 72.171, "p": 64, "v": 67}, {"s": 72.826, "e": 72.957, "p": 68, "v": 79}, {"s": 72.826, "e": 73.153, "p": 64, "v": 87}, {"s": 72.826, "e": 73.219, "p": 60, "v": 79}, {"s": 72.826, "e": 73.153, "p": 61, "v": 59}, {"s": 72.826, "e": 73.153, "p": 55, "v": 63}, {"s": 73.219, "e": 73.415, "p": 59, "v": 55}, {"s": 73.219, "e": 73.481, "p": 64, "v": 67}, {"s": 73.219, "e": 73.415, "p": 69, "v": 67}, {"s": 73.219, "e": 73.874, "p": 59, "v": 71}, {"s": 73.219, "e": 73.808, "p": 52, "v": 75}, {"s": 73.219, "e": 73.481, "p": 54, "v": 83}, {"s": 74.397, "e": 74.856, "p": 65, "v": 71}, {"s": 74.397, "e": 74.79, "p": 57, "v": 67}, {"s": 74.397, "e": 74.659, "p": 63, "v": 31}, {"s": 74.397, "e": 74.594, "p": 62, "v": 55}, {"s": 75.183, "e": 75.249, "p": 60, "v": 67}, {"s": 75.445, "e": 76.1, "p": 64, "v": 83}, {"s": 75.445, "e": 76.166, "p": 55, "v": 55}, {"s": 75.445, "e": 76.231, "p": 54, "v": 63}, {"s": 75.445, "e": 77.148, "p": 61, "v": 63}, {"s": 75.445, "e": 77.672, "p": 57, "v": 39}, {"s": 77.934, "e": 78.261, "p": 60, "v": 71}, {"s": 78.065, "e": 78.327, "p": 69, "v": 79}, {"s": 78.065, "e": 78.327, "p": 69, "v": 91}, {"s": 78.065, "e": 78.261, "p": 60, "v": 71}, {"s": 78.327, "e": 78.589, "p": 65, "v": 67}, {"s": 78.589, "e": 78.851, "p": 64, "v": 75}, {"s": 78.589, "e": 78.851, "p": 60, "v": 63}, {"s": 78.589, "e": 78.851, "p": 52, "v": 83}, {"s": 78.589, "e": 78.851, "p": 68, "v": 67}, {"s": 78.589, "e": 78.916, "p": 70, "v": 67}, {"s": 78.851, "e": 79.113, "p": 72, "v": 67}, {"s": 78.851, "e": 78.982, "p": 67, "v": 35}, {"s": 79.113, "e": 79.375, "p": 69, "v": 71}, {"s": 79.113, "e": 79.44, "p": 61, "v": 67}, {"s": 79.113, "e": 79.44, "p": 57, "v": 79}, {"s": 79.113, "e": 79.375, "p": 65, "v": 59}, {"s": 79.375, "e": 79.571, "p": 60, "v": 91}, {"s": 79.637, "e": 80.685, "p": 59, "v": 71}, {"s": 79.637, "e": 80.095, "p": 64, "v": 63}, {"s": 79.637, "e": 80.292, "p": 69, "v": 87}, {"s": 79.637, "e": 80.488, "p": 55, "v": 75}, {"s": 79.637, "e": 79.964, "p": 59, "v": 55}, {"s": 79.637, "e": 80.095, "p": 64, "v": 83}, {"s": 79.637, "e": 80.095, "p": 71, "v": 63}, {"s": 79.637, "e": 80.095, "p": 62, "v": 47}, {"s": 79.637, "e": 80.226, "p": 62, "v": 67}, {"s": 79.637, "e": 79.964, "p": 57, "v": 63}, {"s": 79.899, "e": 80.226, "p": 62, "v": 67}, {"s": 80.423, "e": 80.619, "p": 60, "v": 87}, {"s": 80.685, "e": 81.078, "p": 57, "v": 75}, {"s": 80.685, "e": 81.078, "p": 56, "v": 59}, {"s": 80.685, "e": 81.078, "p": 67, "v": 71}, {"s": 80.685, "e": 81.012, "p": 61, "v": 35}, {"s": 81.209, "e": 81.536, "p": 57, "v": 79}, {"s": 81.209, "e": 81.47, "p": 63, "v": 63}, {"s": 81.209, "e": 81.405, "p": 53, "v": 75}, {"s": 81.732, "e": 82.06, "p": 59, "v": 59}, {"s": 81.732, "e": 81.994, "p": 54, "v": 63}, {"s": 81.732, "e": 81.929, "p": 61, "v": 55}], "duration": 82.06}};
+
+const NAMES = ["Do","Do#","Re","Re#","Mi","Fa","Fa#","Sol","Sol#","La","La#","Si"];
+function noteName(m) { return NAMES[m % 12] + (Math.floor(m / 12) - 1); }
+function freq(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+function fmt(t) { const m = Math.floor(t / 60), s = Math.floor(t % 60); return m + ":" + String(s).padStart(2, "0"); }
+
+const canvas = document.getElementById("stage");
+const ctx = canvas.getContext("2d");
+const btnPlay = document.getElementById("btnPlay");
+const btnRestart = document.getElementById("btnRestart");
+const seek = document.getElementById("seek");
+const timeLabel = document.getElementById("timeLabel");
+const nowNoteEl = document.getElementById("nowNote");
+const nowFreqEl = document.getElementById("nowFreq");
+const selSpeed = document.getElementById("selSpeed");
+
+let notes = SONGS["generada"].notes;
+let duration = SONGS["generada"].duration;
+let lo = Math.min(...notes.map(n => n.p)) - 2;
+let hi = Math.max(...notes.map(n => n.p)) + 2;
+
+let playing = false;
+let speed = 1;
+let baseTime = 0;
+let baseCtxTime = 0;
+let audioCtx = null;
+let nextIdx = 0;
+let activeSources = [];
+const FALL_PX_PER_SEC = 130;
+
+function songTime() {
+  if (!playing || !audioCtx) return baseTime;
+  return Math.min(duration, baseTime + (audioCtx.currentTime - baseCtxTime) * speed);
+}
+
+function xOf(pitch, W) {
+  const margin = 46;
+  return margin + (pitch - lo) / (hi - lo) * (W - 2 * margin);
+}
+function yOf(t, nowY, tNow) { return nowY - (t - tNow) * FALL_PX_PER_SEC; }
+
+function ensureAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === "suspended") audioCtx.resume();
+}
+
+function stopSources() {
+  for (const s of activeSources) { try { s.stop(); } catch (e) {} }
+  activeSources = [];
+}
+
+function scheduleFrom(t) {
+  let a = 0, b = notes.length;
+  while (a < b) { const m = (a + b) >> 1; if (notes[m].s < t) a = m + 1; else b = m; }
+  nextIdx = a;
+}
+
+function scheduleAhead() {
+  if (!playing || !audioCtx) return;
+  const t = songTime();
+  const horizon = t + 0.4;
+  while (nextIdx < notes.length && notes[nextIdx].s < horizon) {
+    const n = notes[nextIdx];
+    const when = baseCtxTime + Math.max(0, (n.s - baseTime) / speed);
+    const dur = Math.max(0.05, (n.e - n.s) / speed);
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = "triangle";
+    osc.frequency.value = freq(n.p);
+    const peak = 0.28 * (n.v / 127);
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.linearRampToValueAtTime(peak, when + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, when + dur + 0.12);
+    osc.connect(g); g.connect(audioCtx.destination);
+    osc.start(when); osc.stop(when + dur + 0.2);
+    activeSources.push(osc);
+    nextIdx++;
+  }
+}
+setInterval(scheduleAhead, 60);
+
+function play() {
+  ensureAudio();
+  baseTime = songTime();
+  baseCtxTime = audioCtx.currentTime;
+  scheduleFrom(baseTime);
+  playing = true;
+  btnPlay.textContent = "⏸ Pausar";
+}
+function pause() {
+  baseTime = songTime();
+  playing = false;
+  stopSources();
+  btnPlay.textContent = "▶ Reproducir";
+}
+btnPlay.onclick = () => { playing ? pause() : play(); };
+btnRestart.onclick = () => { pause(); baseTime = 0; seek.value = 0; };
+document.getElementById("btnGenerada").onclick = () => { pause(); baseTime = 0; seek.value = 0; };
+selSpeed.onchange = () => {
+  const wasPlaying = playing;
+  if (wasPlaying) pause();
+  speed = parseFloat(selSpeed.value);
+  if (wasPlaying) play();
+};
+seek.oninput = () => {
+  const wasPlaying = playing;
+  if (wasPlaying) pause();
+  baseTime = parseFloat(seek.value);
+  if (wasPlaying) play();
+};
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  const r = canvas.getBoundingClientRect();
+  canvas.width = Math.round(r.width * dpr);
+  canvas.height = Math.round(r.height * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener("resize", resize);
+resize();
+
+const STAFF_LINES = [64, 67, 71, 74, 77, 43, 47, 50, 53, 57];
+
+function draw() {
+  const W = canvas.getBoundingClientRect().width;
+  const H = canvas.getBoundingClientRect().height;
+  const t = songTime();
+  const nowY = H - 90;
+  ctx.clearRect(0, 0, W, H);
+
+  for (let p = lo; p <= hi; p++) {
+    const x = xOf(p, W);
+    if (STAFF_LINES.includes(p)) {
+      ctx.strokeStyle = "#3a4a63"; ctx.lineWidth = 2;
+    } else if (p % 12 === 0) {
+      ctx.strokeStyle = "#232f47"; ctx.lineWidth = 1;
+    } else { continue; }
+    ctx.beginPath(); ctx.moveTo(x, 8); ctx.lineTo(x, H - 8); ctx.stroke();
+  }
+  ctx.fillStyle = "#7d8ea8"; ctx.font = "11px system-ui"; ctx.textAlign = "center";
+  for (let p = lo; p <= hi; p++) {
+    if (p % 12 === 0) ctx.fillText(noteName(p), xOf(p, W), 22);
+  }
+  ctx.fillStyle = "#7d8ea8"; ctx.textAlign = "left";
+  ctx.fillText("← graves", 8, H - 14);
+  ctx.textAlign = "right";
+  ctx.fillText("agudas →", W - 8, H - 14);
+
+  ctx.strokeStyle = "#f2b705"; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(0, nowY); ctx.lineTo(W, nowY); ctx.stroke();
+  ctx.fillStyle = "#f2b705"; ctx.font = "bold 13px system-ui"; ctx.textAlign = "left";
+  ctx.fillText("AHORA — aquí suena la nota", 10, nowY - 8);
+
+  let sounding = null;
+  for (const n of notes) {
+    if (n.s > t + 8) break;
+    if (n.e < t - 1) continue;
+    const x = xOf(n.p, W);
+    const yTop = yOf(n.e, nowY, t);
+    const yBot = yOf(n.s, nowY, t);
+    let color, alpha;
+    if (t >= n.s && t < n.e) {
+      color = "#f2b705"; alpha = 1;
+      if (!sounding || n.s > sounding.s) sounding = n;
+    } else if (n.s > t) {
+      color = "#6f8fb5"; alpha = 0.35;
+    } else {
+      color = "#556070"; alpha = Math.max(0, 0.45 * (1 - (t - n.e) / 0.6));
+    }
+    if (alpha <= 0.01) continue;
+    ctx.globalAlpha = alpha;
+    if (t >= n.s && t < n.e) { ctx.shadowColor = "#f2b705"; ctx.shadowBlur = 14; }
+    ctx.fillStyle = color;
+    const bw = 16;
+    const top = Math.min(yTop, yBot), h = Math.max(10, Math.abs(yBot - yTop));
+    ctx.beginPath();
+    ctx.roundRect(x - bw / 2, top, bw, h, 5);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.ellipse(x, yBot, 10, 6.5, -0.25, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    if (t >= n.s && t < n.e) {
+      ctx.fillStyle = "#ffe9a8"; ctx.font = "bold 13px system-ui"; ctx.textAlign = "left";
+      ctx.fillText(noteName(n.p), x + 14, yBot + 4);
+    }
+  }
+
+  if (sounding) {
+    nowNoteEl.textContent = noteName(sounding.p);
+    nowFreqEl.textContent = freq(sounding.p).toFixed(1) + " Hz · MIDI " + sounding.p;
+  } else {
+    nowNoteEl.textContent = "—";
+    nowFreqEl.textContent = "";
+  }
+
+  if (document.activeElement !== seek) seek.value = t;
+  timeLabel.textContent = fmt(t) + " / " + fmt(duration);
+  if (playing && t >= duration) pause();
+
+  requestAnimationFrame(draw);
+}
+seek.max = duration;
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>

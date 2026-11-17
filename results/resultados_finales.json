@@ -1,0 +1,49 @@
+{
+  "proyecto": "DeepMidi-LSTM — Generación Musical con LSTM y REMI",
+  "autor": "Roberto Alejandro Chagra Martinez",
+  "codigo_estudiante": "208447128",
+  "dataset": {
+    "origen": "Corpus MIDI estructurado en Google Drive (examples/)",
+    "archivos_totales_descubiertos": 21,
+    "canciones_seleccionadas": 20,
+    "canciones_limpias_conservadas": 20,
+    "canciones_descartadas": 0,
+    "secuencias_utilizables_entrenamiento": 20
+  },
+  "tokenizacion": {
+    "formato": "REMI (Revamped MIDI)",
+    "tamano_vocabulario": 435,
+    "pad_token_id": 0,
+    "longitud_promedio_tokens": 3140.35
+  },
+  "entrenamiento": {
+    "arquitectura": "MusicLM (Embedding 256 + 2x LSTM 512 + Dropout 0.2 + FC)",
+    "mejor_epoca": 12,
+    "mejor_val_loss": 3.2583,
+    "train_loss_final": 1.842,
+    "dispositivo": "cuda"
+  },
+  "generacion": {
+    "pasos_generados": 1500,
+    "temperatura": 0.68,
+    "top_k": 15,
+    "repetition_penalty": 1.2,
+    "total_tokens_generados": 1332,
+    "metricas_generada": {
+      "n_notas": 374,
+      "duracion_s": 82.06,
+      "pitch_min": 47,
+      "pitch_max": 82,
+      "pitch_promedio": 61.84,
+      "notas_por_segundo": 4.56,
+      "duracion_nota_promedio_s": 0.559,
+      "notas_por_compas": 9.55
+    }
+  },
+  "archivos_generados": {
+    "composicion_midi": "/content/drive/MyDrive/Drive.alumno.udg.mx/Proyectos/Proyecto_MIDI/results/mi_primera_composicion_ia_remi.mid",
+    "audio_wav": "/content/drive/MyDrive/Drive.alumno.udg.mx/Proyectos/Proyecto_MIDI/results/mi_primera_composicion_ia_remi.wav",
+    "animacion_html": "/content/drive/MyDrive/Drive.alumno.udg.mx/Proyectos/Proyecto_MIDI/results/animacion_composicion_generada.html",
+    "checkpoint": "/content/drive/MyDrive/Drive.alumno.udg.mx/Proyectos/Proyecto_MIDI/results/parte7_mejor_modelo.pt"
+  }
+}

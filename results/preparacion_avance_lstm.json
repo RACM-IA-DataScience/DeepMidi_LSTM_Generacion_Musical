@@ -1,0 +1,36 @@
+{
+    "proyecto": "DeepMidi-LSTM — Generación Musical con Redes Recurrentes (LSTM)",
+    "modelo_asignado": "LSTM (Long Short-Term Memory)",
+    "estudiante": "Roberto Alejandro Chagra Martinez",
+    "codigo": "208447128",
+    "dataset": {
+        "archivos_totales_explorados": 748,
+        "generos_identificados": 11,
+        "canciones_seleccionadas_lstm": 748,
+        "canciones_conservadas_limpias": 703,
+        "canciones_descartadas": 45,
+        "secuencias_utilizables": 703
+    },
+    "tokenizacion": {
+        "paradigma": "REMI (Revamped MIDI)",
+        "tamano_vocabulario": 435,
+        "pad_id": 0,
+        "longitud_promedio_tokens": 3653.846372688478
+    },
+    "preparacion_lstm": {
+        "particion_canciones": "562 train / 141 val",
+        "estrategia_ventanas": "Sliding Window (L=256, solapamiento 50%, stride 128)",
+        "ventanas_entrenamiento": 15608,
+        "ventanas_validacion": 4104,
+        "dimension_lote_x": [
+            32,
+            255
+        ],
+        "dimension_lote_y": [
+            32,
+            255
+        ],
+        "tipo_dato_tensor": "torch.int64",
+        "batch_size": 32
+    }
+}
