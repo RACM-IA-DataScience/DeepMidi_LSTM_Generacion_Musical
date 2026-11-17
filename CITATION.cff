@@ -5,7 +5,7 @@ authors:
 title: "Proyecto MIDI: Generación y Modelado Musical con MidiTok (REMI) y PyTorch"
 version: 1.0.0
 date-released: 2026-11-06
-url: "https://github.com/tu-usuario/Proyecto_MIDI"
+url: "https://github.com/tu-usuario/DeepMidi_LSTM_Generacion_Musical"
 keywords:
   - symbolic-music
   - miditok

@@ -64,7 +64,7 @@ flowchart LR
 ## 📂 Estructura del Repositorio
 
 ```text
-Proyecto_MIDI/
+DeepMidi_LSTM_Generacion_Musical/
 ├── .gitignore                             # Configuración de exclusiones git
 ├── .gitattributes                          # Normalización de fin de línea
 ├── LICENSE                                # Licencia de código abierto MIT
@@ -99,8 +99,8 @@ Proyecto_MIDI/
 
 ### 1. Clonar el Repositorio
 ```bash
-git clone https://github.com/tu-usuario/Proyecto_MIDI.git
-cd Proyecto_MIDI
+git clone https://github.com/tu-usuario/DeepMidi_LSTM_Generacion_Musical.git
+cd DeepMidi_LSTM_Generacion_Musical
 ```
 
 ### 2. Crear y Activar un Entorno Virtual

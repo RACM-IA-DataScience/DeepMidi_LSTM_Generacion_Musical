@@ -8,8 +8,8 @@
 
 1. Haz un fork del repositorio y clona tu copia localmente:
    ```bash
-   git clone https://github.com/tu-usuario/Proyecto_MIDI.git
-   cd Proyecto_MIDI
+   git clone https://github.com/tu-usuario/DeepMidi_LSTM_Generacion_Musical.git
+   cd DeepMidi_LSTM_Generacion_Musical
    ```
 2. Crea un entorno virtual y asegúrate de instalar las dependencias exactas:
    ```bash
