@@ -1,0 +1,48 @@
+---
+references:
+  - "File: /DeepMidi_LSTM_Proyecto_Integrador.py"
+generationTime: 2026-11-18T12:21:29.378Z
+---
+classDiagram
+    class MusicLM {
+        +Embedding embedding
+        +LSTM lstm
+        +Dropout dropout
+        +Linear fc
+        +__init__(vocab_size, embedding_dim, hidden_dim, num_layers, dropout, pad_idx) void
+        +forward(x, hidden) Tuple
+    }
+
+    class VentanasDataset {
+        +List~Tensor~ x
+        +List~Tensor~ y
+        +__init__(x_list, y_list) void
+        +__len__() int
+        +__getitem__(idx) Tuple
+    }
+
+    class Module
+    class Dataset
+    class Embedding
+    class LSTM
+    class Dropout
+    class Linear
+
+    class Audio {
+        +String filename
+        +__init__(filename, args, kwargs) void
+        +__repr__() String
+    }
+
+    class HTML {
+        +String data
+        +__init__(data) void
+        +__repr__() String
+    }
+
+    MusicLM --|> Module : extends
+    VentanasDataset --|> Dataset : extends
+    MusicLM *-- Embedding : contains
+    MusicLM *-- LSTM : contains
+    MusicLM *-- Dropout : contains
+    MusicLM *-- Linear : contains

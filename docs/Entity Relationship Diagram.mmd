@@ -1,0 +1,69 @@
+---
+references:
+  - "File: /DeepMidi_LSTM_Proyecto_Integrador.py"
+generationTime: 2026-11-18T12:18:26.683Z
+---
+erDiagram
+    MIDI_FILE {
+        int file_id PK
+        string path
+        string status
+        float duration_seconds
+        int note_count
+    }
+    CLEAN_TRACK {
+        int track_id PK
+        int source_file_id FK
+        string output_path
+        int program
+        int note_count
+    }
+    TOKEN_SEQUENCE {
+        int sequence_id PK
+        int track_id FK
+        int token_count
+        string data_split
+    }
+    WINDOW {
+        int window_id PK
+        int sequence_id FK
+        int start_token
+        int input_length
+        int target_length
+    }
+    TRAINING_RUN {
+        int run_id PK
+        int vocabulary_size
+        int best_epoch
+        float validation_loss
+    }
+    CHECKPOINT {
+        int checkpoint_id PK
+        int run_id FK
+        string path
+        int epoch
+        float validation_loss
+    }
+    COMPOSITION {
+        int composition_id PK
+        int checkpoint_id FK
+        int seed_sequence_id FK
+        string midi_path
+        int note_count
+        float duration_seconds
+    }
+    OUTPUT_ASSET {
+        int asset_id PK
+        int composition_id FK
+        string format
+        string path
+    }
+
+    MIDI_FILE ||--o| CLEAN_TRACK : yields
+    CLEAN_TRACK ||--o| TOKEN_SEQUENCE : tokenizes
+    TOKEN_SEQUENCE ||--|{ WINDOW : segments_into
+    TRAINING_RUN }o--o{ WINDOW : trains_on
+    TRAINING_RUN ||--o| CHECKPOINT : saves
+    CHECKPOINT ||--o{ COMPOSITION : generates
+    TOKEN_SEQUENCE ||--o{ COMPOSITION : seeds
+    COMPOSITION ||--o{ OUTPUT_ASSET : produces

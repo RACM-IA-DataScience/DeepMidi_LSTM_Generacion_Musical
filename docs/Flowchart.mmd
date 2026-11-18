@@ -1,0 +1,33 @@
+---
+references:
+  - "File: /DeepMidi_LSTM_Proyecto_Integrador.py"
+generationTime: 2026-11-18T12:16:14.683Z
+---
+flowchart TD
+    A(["Entry: app.run()"]) --> B["Set up dependencies, seeds, device, and paths"]
+    B --> C{"Is the examples/ dataset available?"}
+    C -->|Yes| E["Discover MIDI files and build inventory"]
+    C -->|No| D["Download examples/ from Google Drive"]
+    D --> E
+    E --> F["Inspect each MIDI file"]
+    F --> G{"Does a file pass track and quality filters?"}
+    G -->|Yes| H["Select a track and export clean MIDI"]
+    G -->|No| F
+    H -->|Next file| F
+    F -->|All files processed| I["Tokenize clean MIDI files with REMI"]
+    I --> J{"Does a sequence meet the 64-token minimum?"}
+    J -->|Yes: keep| K["Split by song and create overlapping windows"]
+    J -->|No: exclude| K
+    K --> L["Build PyTorch datasets and DataLoaders"]
+    L --> M{"Reusable checkpoint exists and retraining is disabled?"}
+    M -->|Yes| Q["Restore best checkpoint"]
+    M -->|No| N["Train epoch; validate, update scheduler, and track patience"]
+    N --> O{"Improved, continue, or stop?"}
+    O -->|Improved| P["Save best checkpoint"]
+    P --> N
+    O -->|No improvement; continue| N
+    O -->|Patience exhausted| Q
+    Q --> R["Generate tokens autoregressively with LSTM"]
+    R --> S["Decode tokens and save generated MIDI"]
+    S --> T["Evaluate metrics; synthesize audio and render player, visuals, and UI"]
+    T --> U(["Export final results JSON"])
