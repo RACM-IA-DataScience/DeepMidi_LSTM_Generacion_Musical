@@ -1,332 +1,377 @@
-# 📖 Diccionario de Funciones y Referencia de la API
+# 📖 Diccionario de Funciones y Referencia de la API — DeepMidi-LSTM
 
-Este documento proporciona la especificación técnica exhaustiva de todas las funciones, métodos y clases implementadas en el **Proyecto MIDI**, abarcando tanto el cuaderno interactivo (`flujo_procesamiento_midi.ipynb`) como el script de ejecución modular (`flujo_procesamiento_midi_alternativa.py`).
+Este documento proporciona la especificación técnica exhaustiva de todas las constantes globales, diccionarios de configuración, clases y funciones implementadas en el cuaderno principal del proyecto: **[`DeepMidi_LSTM_Proyecto_Integrador.ipynb`](../DeepMidi_LSTM_Proyecto_Integrador.ipynb)** (Partes 0 a 11 + exportación reproducible).
 
 ---
 
 ## 📑 Tabla de Contenidos
 
-### Módulo Principal: Cuaderno Interactivo (`flujo_procesamiento_midi.ipynb`)
-1. [create_synthetic_demo_dataset](#1-create_synthetic_demo_dataset)
-2. [scan_midi_repository](#2-scan_midi_repository)
-3. [inspect_midi_file](#3-inspect_midi_file)
-4. [extract_usable_training_chunks](#4-extract_usable_training_chunks)
-5. [MIDILanguageModelDataset (Clase)](#5-midilanguagemodeldataset-clase)
-6. [GeneradorMusicalTokens (Clase)](#6-generadormusicaltokens-clase)
-7. [generar_musica_tokens](#7-generar_musica_tokens)
-8. [plot_piano_roll_from_score](#8-plot_piano_roll_from_score)
-9. [sintetizar_audio_midi](#9-sintetizar_audio_midi)
+### Configuración Global y Constantes (Partes 0, 2 y 7)
+1. [Constantes Globales del Pipeline](#1-constantes-globales-del-pipeline)
+2. [`GM_PROGRAMS` y `HIPERPARAMETROS`](#2-gm_programs-e-hiperparametros)
 
-### Módulo Modular: Script Python (`flujo_procesamiento_midi_alternativa.py`)
-10. [load_dataset](#10-load_dataset)
-11. [explore_midi](#11-explore_midi)
-12. [clean_data](#12-clean_data)
-13. [tokenize_data](#13-tokenize_data)
-14. [analyze_stats](#14-analyze_stats)
-15. [MIDIDataset (Clase)](#15-mididataset-clase)
-16. [prepare_data](#16-prepare_data)
-17. [main](#17-main)
+### Exploración y Auditoría MIDI (Parte 2)
+3. [`gm_name`](#3-gm_name)
+4. [`inspeccionar_midi`](#4-inspeccionar_midi)
 
----
+### Preparación de Secuencias y Tensores LSTM (Parte 6)
+5. [`strip_clean_prefix`](#5-strip_clean_prefix)
+6. [`reparto_estratificado`](#6-reparto_estratificado)
+7. [`ventanear`](#7-ventanear)
+8. [`VentanasDataset` (Clase)](#8-ventanasdataset-clase)
 
-## Módulo: `flujo_procesamiento_midi.ipynb`
+### Modelo Neuronal LSTM e Inferencia Autorregresiva (Partes 7 y 8)
+9. [`MusicLM` (Clase)](#9-musiclm-clase)
+10. [`generar_musica_tokens`](#10-generar_musica_tokens)
 
-### 1. `create_synthetic_demo_dataset`
+### Evaluación Objetiva y Síntesis Acústica (Partes 9 y 10)
+11. [`metricas_score`](#11-metricas_score)
+12. [`sintetizar_audio_midi`](#12-sintetizar_audio_midi)
 
-```python
-def create_synthetic_demo_dataset(base_dir: Path) -> None
-```
-
-- **Descripción**: Genera programáticamente un corpus sintético de archivos MIDI estructurado en carpetas jerárquicas realistas. Incluye composiciones clásicas (Chopin, Bach), ensambles con percusión (Jazz, Pop) y casos borde (frecuencias fuera de rango, archivos muy cortos o corruptos) para probar la robustez del filtrado.
-- **Parámetros**:
-  - `base_dir` (`pathlib.Path`): Directorio raíz donde se crearán las subcarpetas y los archivos MIDI.
-- **Retorno**: `None`. Los archivos se escriben directamente en el sistema de archivos.
-- **Estructura generada**:
-  - `classical/chopin/chopin_nocturne_op9.mid` (Piano solo, 240 notas)
-  - `classical/bach/bach_two_part_invention.mid` (Invención polifónica a dos voces)
-  - `jazz_quartet/autumn_leaves_jazz_trio.mid` (Multitrack con bajo y batería)
-  - `pop_ballad/pop_ballad_melody.mid` (Piano y batería pop)
-  - `atypical_noise/extreme_frequencies_noise.mid` (Pitches inaudibles < 21 y > 108)
-  - `atypical_noise/too_short_fragment.mid` (Fragmento de 1 segundo / 8 notas)
-  - `corrupted/corrupted_empty_header.mid` (Bytes inválidos para probar captura de errores)
+### Visualización, Reproductores Animados e Interfaz Interactiva (Parte 11)
+13. [`plot_piano_roll_from_score`](#13-plot_piano_roll_from_score)
+14. [`score_to_abc`](#14-score_to_abc)
+15. [`player_page`](#15-player_page)
+16. [`construir_animacion_notas`](#16-construir_animacion_notas)
+17. [`on_generar_click` (Callback `ipywidgets`)](#17-on_generar_click-callback-ipywidgets)
 
 ---
 
-### 2. `scan_midi_repository`
+## 1. Constantes Globales del Pipeline
 
-```python
-def scan_midi_repository(root_path: Path) -> pd.DataFrame
-```
+Definidas en la **Parte 0 (Celda 02)** para garantizar determinismo, resolución dinámica de rutas (Google Colab o entorno local) y consistencia en todo el flujo:
 
-- **Descripción**: Realiza una búsqueda recursiva de todos los archivos con extensiones MIDI válidas dentro del árbol de directorios especificado, construyendo un inventario tabular inicial.
-- **Parámetros**:
-  - `root_path` (`pathlib.Path`): Directorio base desde el cual iniciar la exploración recursiva.
-- **Retorno**: `pd.DataFrame` con las siguientes columnas:
-  - `filename` (`str`): Nombre del archivo con extensión.
-  - `relative_path` (`str`): Ruta relativa respecto a `root_path`.
-  - `file_path` (`str`): Ruta absoluta en el sistema.
-  - `size_kb` (`float`): Tamaño del archivo en kilobytes.
-- **Excepciones**: Manejo interno de advertencia si la carpeta raíz no existe o no contiene archivos `.mid`.
-
----
-
-### 3. `inspect_midi_file`
-
-```python
-def inspect_midi_file(file_path: str) -> dict
-```
-
-- **Descripción**: Abre y analiza el contenido acústico-musical de un archivo MIDI individual utilizando el motor C++ de `symusic`.
-- **Parámetros**:
-  - `file_path` (`str`): Ruta del archivo MIDI a examinar.
-- **Retorno**: `dict` con métricas acústicas estructuradas:
-  - `filename` (`str`): Nombre del archivo.
-  - `file_path` (`str`): Ruta del archivo.
-  - `duration_sec` (`float`): Duración en segundos de la pieza.
-  - `total_notes` (`int`): Conteo total de notas en todas las pistas.
-  - `num_tracks` (`int`): Número total de pistas.
-  - `is_multi_track` (`bool`): `True` si contiene más de una pista.
-  - `has_drums` (`bool`): `True` si al menos una pista tiene percusión (`is_drum == True`).
-  - `programs` (`list[int]`): Lista de instrumentos General MIDI presentes.
-  - `pct_ideal_range` (`float`): Porcentaje de notas dentro del registro de piano [21, 108].
-  - `status` (`str`): `"OK"` si la lectura fue exitosa o `"ERROR"` en caso de fallo.
-  - `error_msg` (`str`): Detalle del error capturado o `None`.
-- **Excepciones**: Captura genérica de excepciones `Exception` ante archivos truncados o corruptos, registrando el error sin detener el flujo global.
+| Constante | Valor | Descripción |
+|---|---|---|
+| `SEED` | `42` | Semilla determinista aplicada a `random`, `numpy` y `torch`. |
+| `URL_PUBLIC_EXAMPLES` | Google Drive URL | Enlace público de respaldo para descarga automática de `examples/` vía `gdown`. |
+| `EXAMPLES_DIR` / `RAW_DIR` | `<DRIVE_PROYECTO>/examples` | Directorio raíz del corpus MIDI estructurado (748 archivos, 11 géneros). |
+| `CLEAN_DIR` | `<DRIVE_PROYECTO>/dataset_midi_clean` | Destino de las pistas depuradas monopista (703 archivos `clean_*.mid`). |
+| `RESULTS_DIR` | `<DRIVE_PROYECTO>/results` | Carpeta de artefactos de salida (`.pt`, `.npz`, `.json`, `.png`, `.mid`, `.wav`, `.html`). |
+| `MIN_PITCH`, `MAX_PITCH` | `21`, `108` | Registro estándar de piano de 88 teclas ($A_0$ a $C_8$). |
+| `MIN_NOTES_THRESHOLD` | `50` | Mínimo de notas exigido en la pista seleccionada. |
+| `MIN_DURATION_SECONDS` | `5.0` | Duración mínima en segundos de cada obra conservada. |
+| `MAX_OUT_OF_RANGE_PCT` | `5.0` | Porcentaje máximo tolerado de notas fuera del rango `[21, 108]`. |
+| `TARGET_PROGRAMS` | `set(range(0, 8))` | Programas General MIDI priorizados (pianos acústicos y eléctricos GM 0–7). |
+| `MIN_TOKENS_USABLE` | `64` | Longitud mínima de secuencia REMI para ser utilizable en entrenamiento. |
+| `MAX_LEN` | `256` | Longitud de ventana deslizante ($X$ e $Y$ de longitud `255`). |
+| `SPLIT_TRAIN` | `0.8` | Proporción de división a nivel de canción (80% entrenamiento / 20% validación). |
+| `BATCH_SIZE` | `32` | Tamaño de mini-lote de los `DataLoader` de PyTorch. |
 
 ---
 
-### 4. `extract_usable_training_chunks`
+## 2. `GM_PROGRAMS` e `HIPERPARAMETROS`
 
-```python
-def extract_usable_training_chunks(token_ids_list: list[list[int]], max_len: int = 256, stride: int = 128) -> list[list[int]]
-```
-
-- **Descripción**: Aplica una ventana deslizante con solapamiento sobre las listas de IDs de tokens de cada obra para transformarlas en fragmentos homogéneos de longitud fija aptos para el entrenamiento de redes neuronales.
-- **Parámetros**:
-  - `token_ids_list` (`list[list[int]]`): Lista donde cada elemento es la secuencia de IDs de una canción.
-  - `max_len` (`int`, opcional): Longitud de la ventana de contexto. Por defecto `256`.
-  - `stride` (`int`, opcional): Desplazamiento de la ventana entre fragmentos contiguos. Por defecto `128` (50% de solapamiento).
-- **Retorno**: `list[list[int]]`: Colección de fragmentos discretos. Fragmentos de longitud $\ge 64$ tokens se conservan y se completan con ceros (*padding*).
-
----
-
-### 5. `MIDILanguageModelDataset` (Clase)
-
-```python
-class MIDILanguageModelDataset(torch.utils.data.Dataset)
-```
-
-Especialización de `Dataset` de PyTorch para modelado de lenguaje autorregresivo del siguiente token.
-
-#### Métodos:
-
-- `__init__(self, sequences: list[list[int]], max_len: int = 256, pad_id: int = 0)`
-  - **Parámetros**:
-    - `sequences`: Lista de secuencias de tokens pre-segmentadas.
-    - `max_len`: Longitud máxima del tensor.
-    - `pad_id`: ID del token de relleno (padding).
-  - **Lógica**: Divide cada fragmento en un par entrada-objetivo:
-    - Entrada $X = [t_0, t_1, \dots, t_{N-1}]$
-    - Objetivo $Y = [t_1, t_2, \dots, t_N]$ (desplazado en 1 posición)
-- `__len__(self) -> int`: Retorna la cantidad de pares $X, Y$ disponibles.
-- `__getitem__(self, idx: int) -> dict[str, torch.Tensor]`: Retorna un diccionario con tensores de tipo `torch.long`:
-  - `input_ids`: Tensor de forma `[max_len - 1]`.
-  - `target_ids`: Tensor de forma `[max_len - 1]`.
+- **`GM_PROGRAMS` (`dict[int, str]`, Parte 2 — Celda 06):** Tabla completa de los 128 instrumentos del estándar General MIDI (`0: "Acoustic Grand Piano"` hasta `127: "Gunshot"`).
+- **`HIPERPARAMETROS` (`dict[str, int | float]`, Parte 7 — Celda 18):** Diccionario centralizado de arquitectura, optimización e inferencia:
+  ```python
+  HIPERPARAMETROS = {
+      "embedding_dim": 256, "hidden_dim": 512, "num_layers": 2, "dropout": 0.2,
+      "batch_size": 32, "max_len": 256, "stride": 128,
+      "epochs": 30, "patience": 5, "learning_rate": 1e-3, "weight_decay": 1e-4,
+      "grad_clip": 1.0, "scheduler_factor": 0.5, "scheduler_patience": 2,
+      "pasos_a_generar": 1300, "temperatura": 0.72, "top_k": 15,
+      "repetition_penalty": 1.18, "ventana_repeticion": 32,
+  }
+  ```
 
 ---
 
-### 6. `GeneradorMusicalTokens` (Clase)
+## 3. `gm_name`
 
 ```python
-class GeneradorMusicalTokens(torch.nn.Module)
+def gm_name(program: int) -> str
 ```
 
-Modelo de lenguaje autorregresivo basado en Redes Neuronales Recurrentes (LSTM) para predicción de secuencias simbólicas.
-
-#### Constructor:
-```python
-def __init__(self, vocab_size: int, embed_dim: int = 128, hidden_dim: int = 256, num_layers: int = 2, dropout: float = 0.2, pad_id: int = 0)
-```
-- **Parámetros**:
-  - `vocab_size` (`int`): Cardinalidad del vocabulario de tokens (típicamente $\approx 435$).
-  - `embed_dim` (`int`): Dimensión del espacio vectorial de embedding. Por defecto `128`.
-  - `hidden_dim` (`int`): Cantidad de neuronas por capa recurrente LSTM. Por defecto `256`.
-  - `num_layers` (`int`): Número de capas LSTM apiladas. Por defecto `2`.
-  - `dropout` (`float`): Probabilidad de regularización por dropout entre capas. Por defecto `0.2`.
-  - `pad_id` (`int`): Índice del token de relleno en la tabla de embeddings.
-
-#### Método `forward`:
-```python
-def forward(self, x: torch.Tensor, hidden: tuple = None) -> tuple[torch.Tensor, tuple]
-```
-- **Parámetros**:
-  - `x` (`torch.Tensor`): Tensor de entrada de forma `[Batch, Seq_Len]`.
-  - `hidden` (`tuple`, opcional): Estados ocultos previos `(h_0, c_0)`.
-- **Retorno**:
-  - `logits` (`torch.Tensor`): Tensor de salida no normalizado de forma `[Batch, Seq_Len, Vocab_Size]`.
-  - `hidden` (`tuple`): Tupla con los estados actualizados `(h_n, c_n)`.
+- **Ubicación:** Parte 2 (Celda 06).
+- **Descripción:** Traduce un número de programa General MIDI (`0`–`127`) a su nombre instrumental legible usando `GM_PROGRAMS`.
+- **Parámetros:**
+  - `program` (`int`): Código de programa MIDI de una pista no percusiva.
+- **Retorno:** `str` con el nombre del instrumento (p. ej., `"Acoustic Grand Piano"`), o `"Programa GM <program>"` si el código no está mapeado.
 
 ---
 
-### 7. `generar_musica_tokens`
+## 4. `inspeccionar_midi`
+
+```python
+def inspeccionar_midi(file_path: str | Path) -> dict
+```
+
+- **Ubicación:** Parte 2 (Celda 06).
+- **Descripción:** Audita simbólica y acústicamente un archivo MIDI individual mediante el motor nativo C++ de `symusic`, extrayendo métricas de duración, densidad de notas, pistas, percusión, instrumentación General MIDI y ajuste al registro de piano de 88 teclas (`21`–`108`).
+- **Parámetros:**
+  - `file_path` (`str | Path`): Ruta del archivo `.mid` / `.midi` a inspeccionar.
+- **Retorno:** `dict` con las claves:
+  - `status` (`str`): `"OK"` si la carga fue exitosa o `"ERROR"` si el archivo está corrupto/ilegible.
+  - `error_msg` (`str`): Mensaje de excepción en caso de fallo (cadena vacía si `"OK"`).
+  - `duration_sec` (`float | None`): Duración total en segundos redondeada a 2 decimales.
+  - `total_notes` (`int`): Suma total de notas en todas las pistas.
+  - `num_tracks` (`int`): Cantidad de pistas en la partitura.
+  - `is_multi_track` (`bool`): `True` si `num_tracks > 1`.
+  - `has_drums` (`bool`): `True` si alguna pista posee `is_drum == True`.
+  - `programs` (`list[int]`): Lista ordenada de códigos GM únicos presentes en pistas no percusivas.
+  - `program_names` (`list[str]`): Nombres legibles correspondientes mediante `gm_name()`.
+  - `min_pitch`, `max_pitch` (`int | None`): Altura MIDI mínima y máxima detectada.
+  - `pct_in_range_21_108` (`float`): Porcentaje de notas dentro de `[MIN_PITCH, MAX_PITCH]`.
+- **Manejo de errores:** Captura cualquier `Exception` de lectura sin interrumpir el escaneo masivo del corpus (identificando los 9 archivos corruptos en `examples/`).
+
+---
+
+## 5. `strip_clean_prefix`
+
+```python
+def strip_clean_prefix(name: str) -> str
+```
+
+- **Ubicación:** Parte 6 (Celda 16).
+- **Descripción:** Remueve de forma iterativa prefijos `"clean_"` redundantes en nombres de archivos MIDI limpios para garantizar correspondencia unívoca entre las listas de validación y los archivos almacenados en `CLEAN_DIR`.
+- **Parámetros:**
+  - `name` (`str`): Nombre de archivo (p. ej., `"clean_O sole mio.mid"`).
+- **Retorno:** `str` con el nombre base normalizado (`"O sole mio.mid"`).
+
+---
+
+## 6. `reparto_estratificado`
+
+```python
+def reparto_estratificado(
+    nombres: list[str],
+    frac_val: float = 1 - SPLIT_TRAIN,
+    semilla: int = SEED,
+) -> tuple[list[int], list[int]]
+```
+
+- **Ubicación:** Parte 6 (Celda 16).
+- **Descripción:** Ejecuta una partición reproducible a nivel de obras completas (80% entrenamiento / 20% validación) garantizando **cero fuga de datos (*zero data leakage*)** entre segmentos de una misma canción.
+- **Parámetros:**
+  - `nombres` (`list[str]`): Nombres de las secuencias utilizables (703 obras).
+  - `frac_val` (`float`): Fracción asignada a validación (por defecto `0.2`).
+  - `semilla` (`int`): Semilla para `random.Random` (por defecto `42`).
+- **Retorno:** Tupla `(train_idx, val_idx)` con listas ordenadas de índices disjuntos (562 entrenamiento / 141 validación).
+
+---
+
+## 7. `ventanear`
+
+```python
+def ventanear(
+    secuencias: list[list[int]],
+    max_len: int = MAX_LEN,
+    stride: int = MAX_LEN // 2,
+    pad_id: int = 0,
+) -> tuple[list[torch.Tensor], list[torch.Tensor]]
+```
+
+- **Ubicación:** Parte 6 (Celda 16).
+- **Descripción:** Segmenta cada secuencia completa de IDs REMI mediante una **ventana deslizante (*sliding window*)** de longitud `max_len` con desplazamiento `stride` (solapamiento del 50%) y construye pares autorregresivos desfasados un paso temporal ($X_t \to Y_t = X_{t+1}$).
+- **Parámetros:**
+  - `secuencias` (`list[list[int]]`): Lista de secuencias de IDs de tokens.
+  - `max_len` (`int`): Tamaño de ventana (por defecto `256`, produciendo tensores de longitud `255`).
+  - `stride` (`int`): Paso entre ventanas consecutivas (por defecto `128`).
+  - `pad_id` (`int`): Identificador de relleno para fragmentos residuales (por defecto `0`).
+- **Retorno:** Tupla `(x_list, y_list)` donde cada elemento es un tensor `torch.int64` de forma `[255]`. En el corpus global genera 15,608 ventanas de entrenamiento y 4,104 de validación.
+
+---
+
+## 8. `VentanasDataset` (Clase)
+
+```python
+class VentanasDataset(torch.utils.data.Dataset)
+```
+
+- **Ubicación:** Parte 6 (Celda 16).
+- **Descripción:** Subclase de `torch.utils.data.Dataset` que encapsula las listas de tensores `(x_list, y_list)` para su carga eficiente por mini-lotes mediante `DataLoader`.
+- **Métodos:**
+  - `__init__(self, x_list: list[torch.Tensor], y_list: list[torch.Tensor]) -> None`: Almacena referencias a los tensores de entrada y objetivo.
+  - `__len__(self) -> int`: Devuelve el número total de ventanas efectivas.
+  - `__getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]`: Retorna el par `(x[idx], y[idx])` de tipo `torch.int64` y forma `[255]`.
+
+---
+
+## 9. `MusicLM` (Clase)
+
+```python
+class MusicLM(torch.nn.Module)
+```
+
+- **Ubicación:** Parte 7 (Celda 18).
+- **Descripción:** Modelo de lenguaje musical autorregresivo sustentado estrictamente en una **Red Neuronal Recurrente LSTM de 2 capas apiladas** con **4,012,723 parámetros entrenables**.
+
+### Constructor
+```python
+def __init__(
+    self,
+    vocab_size: int,
+    embedding_dim: int = 256,
+    hidden_dim: int = 512,
+    num_layers: int = 2,
+    dropout: float = 0.2,
+    pad_idx: int = 0,
+)
+```
+- **Capas internas:**
+  - `self.embedding`: `nn.Embedding(435, 256, padding_idx=0)` — 111,360 parámetros (2.78%).
+  - `self.lstm`: `nn.LSTM(256, 512, num_layers=2, batch_first=True, dropout=0.2)` — 3,678,208 parámetros (91.66%).
+  - `self.dropout`: `nn.Dropout(0.2)` aplicado tras el embedding y antes de la proyección lineal.
+  - `self.fc`: `nn.Linear(512, 435)` — 223,155 parámetros (5.56%).
+
+### Método `forward`
+```python
+def forward(
+    self,
+    x: torch.Tensor,
+    hidden: tuple[torch.Tensor, torch.Tensor] | None = None,
+) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]
+```
+- **Parámetros:**
+  - `x` (`torch.Tensor`): Tensor `torch.int64` de forma `[Batch, Seq_Len]`.
+  - `hidden` (`tuple | None`): Estado oculto y estado de celda previos `(h_t, c_t)` de forma `[num_layers, Batch, hidden_dim]`.
+- **Retorno:** Tupla `(logits, hidden)` donde `logits` tiene forma `[Batch, Seq_Len, vocab_size]` y `hidden` contiene los estados actualizados para propagación continua en inferencia.
+
+---
+
+## 10. `generar_musica_tokens`
 
 ```python
 def generar_musica_tokens(
-    modelo: torch.nn.Module,
+    modelo: nn.Module,
     semilla_ids: list[int],
-    pasos_a_generar: int = 300,
-    temperatura: float = 0.85,
-    top_k: int = 20,
-    max_context: int = 255
+    pasos_a_generar: int = 1300,
+    temperatura: float = 0.72,
+    top_k: int = 15,
+    repetition_penalty: float = 1.18,
+    ventana_repeticion: int = 32,
+    pad_id: int = 0,
 ) -> list[int]
 ```
 
-- **Descripción**: Función de inferencia autorregresiva. A partir de una secuencia de tokens inicial ("semilla" o *prompt*), consulta recurrentemente el modelo para predecir y anexar nuevos tokens musicales uno a uno.
-- **Parámetros**:
-  - `modelo` (`torch.nn.Module`): Instancia entrenada de `GeneradorMusicalTokens`.
-  - `semilla_ids` (`list[int]`): Lista de enteros representando los primeros compases.
-  - `pasos_a_generar` (`int`, opcional): Número total de tokens nuevos a predecir. Por defecto `300`.
-  - `temperatura` (`float`, opcional): Factor de escalado de los logits para controlar la entropía de la distribución. Por defecto `0.85`.
-  - `top_k` (`int`, opcional): Restringe el muestreo estocástico a los $K$ tokens más probables. Por defecto `20`.
-  - `max_context` (`int`, opcional): Longitud máxima de ventana para recortar la entrada y evitar desbordar la capacidad del modelo. Por defecto `255`.
-- **Retorno**: `list[int]`: Secuencia extendida conteniendo los tokens originales de la semilla más los tokens generados.
+- **Ubicación:** Parte 8 (Celda 21).
+- **Descripción:** Ejecuta generación musical autorregresiva estrictamente con la LSTM propagando continuamente el estado oculto `(h_t, c_t)` sin truncar la memoria recurrente.
+- **Parámetros:**
+  - `modelo`: Instancia entrenada de `MusicLM` en modo `.eval()`.
+  - `semilla_ids` (`list[int]`): Secuencia de calentamiento (32 tokens iniciando en el primer compás con notas efectivas para evitar silencios iniciales).
+  - `pasos_a_generar` (`int`): Tokens nuevos a muestrear (por defecto `1300`, totalizando `1332` tokens).
+  - `temperatura` (`float`): Factor de escalado de entropía sobre logits (por defecto `0.72`).
+  - `top_k` (`int`): Número de candidatos más probables retenidos antes del muestreo multinomial (por defecto `15`).
+  - `repetition_penalty` (`float`): Factor $\alpha$ de penalización sobre tokens emitidos recientemente según Keskar et al. (2019) (por defecto `1.18`).
+  - `ventana_repeticion` (`int`): Número de pasos previos considerados para penalizar repeticiones (por defecto `32`).
+  - `pad_id` (`int`): ID de relleno enmascarado con $-\infty$ en cada paso.
+- **Retorno:** `list[int]` con la secuencia completa de IDs REMI lista para decodificación pura con `tokenizer.decode([tokens])`.
 
 ---
 
-### 8. `plot_piano_roll_from_score`
+## 11. `metricas_score`
 
 ```python
-def plot_piano_roll_from_score(score: symusic.Score, titulo: str = "Piano Roll - Composicion Generada por IA") -> None
+def metricas_score(score: symusic.Score) -> dict[str, int | float]
 ```
 
-- **Descripción**: Genera una representación gráfica 2D interactiva tipo Piano Roll utilizando `matplotlib.pyplot`. Representa el tiempo musical (en pulsos / beats) en el eje horizontal y el tono (pitch MIDI) en el eje vertical, resaltando el registro de 88 teclas.
-- **Parámetros**:
-  - `score` (`symusic.Score`): Objeto de partitura simbólica a visualizar.
-  - `titulo` (`str`, opcional): Título del gráfico.
-- **Retorno**: `None`. Muestra la ventana de gráfico mediante `plt.show()`.
+- **Ubicación:** Parte 9 (Celda 23).
+- **Descripción:** Calcula indicadores musicales objetivos sobre cualquier objeto `symusic.Score` (composición generada o pieza real del conjunto de validación) para comparación cuantitativa.
+- **Parámetros:**
+  - `score` (`symusic.Score`): Partitura simbólica MIDI.
+- **Retorno:** `dict` con las claves:
+  - `n_notas` (`int`): Número total de notas.
+  - `duracion_s` (`float`): Duración total en segundos.
+  - `pitch_min`, `pitch_max` (`int`): Extremos tonales MIDI.
+  - `pitch_promedio` (`float`): Altura MIDI media.
+  - `notas_por_segundo` (`float`): Densidad temporal de eventos.
+  - `duracion_nota_promedio_s` (`float`): Duración media por nota en segundos.
+  - `notas_por_compas` (`float`): Densidad rítmica promedio estimada en compases de 4/4.
 
 ---
 
-### 9. `sintetizar_audio_midi`
+## 12. `sintetizar_audio_midi`
 
 ```python
-def sintetizar_audio_midi(score: symusic.Score, ruta_wav_salida: str | Path, sample_rate: int = 22050) -> Path
+def sintetizar_audio_midi(
+    score: symusic.Score,
+    ruta_wav_salida: str | Path,
+    sample_rate: int = 22050,
+) -> None
 ```
 
-- **Descripción**: Sintetizador acústico aditivo en Python puro. Convierte las notas del objeto `symusic.Score` en audio PCM mediante osciladores armónicos y envolventes exponenciales ADSR, asegurando reproducción independiente de códecs externos o SoundFonts.
-- **Parámetros**:
-  - `score` (`symusic.Score`): Objeto simbólico con las pistas y notas a sintetizar.
-  - `ruta_wav_salida` (`str` | `pathlib.Path`): Destino del archivo WAV generado.
-  - `sample_rate` (`int`, opcional): Frecuencia de muestreo en Hz. Por defecto `22050`.
-- **Retorno**: `pathlib.Path`: Ruta confirmada del archivo `.wav` exportado.
-- **Algoritmo interno**:
-  1. Cálculo de frecuencia fundamental: $f = 440 \times 2^{\frac{pitch - 69}{12}}$.
-  2. Generación armónica: $s(t) = 0.7 \sin(2\pi f t) + 0.3 \sin(4\pi f t)$.
-  3. Modulación de envolvente: $e(t) = v \cdot \exp(-3.0 \cdot t / d)$.
-  4. Normalización para prevenir distorsión por recorte (*clipping*) a un factor de seguridad de $0.9$.
-  5. Escritura binaria en PCM de 16 bits mediante el módulo estándar `wave`.
+- **Ubicación:** Parte 10 (Celda 25).
+- **Descripción:** Motor nativo de síntesis acústica en `NumPy` y Python puro que transforma un `symusic.Score` en un archivo de audio WAV mono de **16 bits PCM** a **22,050 Hz**, sin requerir FluidSynth ni SoundFonts externos.
+- **Parámetros:**
+  - `score` (`symusic.Score`): Partitura a sintetizar.
+  - `ruta_wav_salida` (`str | Path`): Ruta destino del archivo `.wav`.
+  - `sample_rate` (`int`): Frecuencia de muestreo en Hz (por defecto `22050`).
+- **Proceso interno:**
+  1. Convierte cada altura MIDI $p$ en frecuencia $f = 440 \cdot 2^{(p-69)/12}$.
+  2. Superpone fundamental y segundo armónico: $\sin(2\pi f t) + 0.3 \sin(4\pi f t)$.
+  3. Modula con envolvente exponencial ADSR (`ataque = min(t / 0.01, 1.0)`, `decaimiento = exp(-t / max(duracion * 0.7, 0.1))`) escalada por `velocity / 127.0`.
+  4. Normaliza al 95% de amplitud máxima para prevenir saturación (*clipping*) y escribe en formato PCM int16 con `wave`.
 
 ---
 
-## Módulo: `flujo_procesamiento_midi_alternativa.py`
-
-### 10. `load_dataset`
+## 13. `plot_piano_roll_from_score`
 
 ```python
-def load_dataset() -> list[str]
+def plot_piano_roll_from_score(
+    score: symusic.Score,
+    titulo: str = "Piano Roll - Composición generada por IA",
+) -> None
 ```
 
-- **Descripción**: Escanea recursivamente el directorio de entrada `RAW_DATASET_DIR` ('dataset_midi_raw') en busca de archivos `.mid` y `.midi`.
-- **Retorno**: `list[str]`: Lista de rutas absolutas o relativas de todos los archivos encontrados.
+- **Ubicación:** Parte 11 (Celda 27).
+- **Descripción:** Genera y guarda el gráfico de Piano Roll (`results/parte10_piano_roll_generada.png`) proyectando el tiempo en segundos contra la altura MIDI (`21`–`108`), codificando la velocidad dinámica mediante el mapa de color `viridis` y la duración mediante el tamaño de cada marcador.
+- **Parámetros:**
+  - `score` (`symusic.Score`): Composición simbólica.
+  - `titulo` (`str`): Título principal de la figura.
 
 ---
 
-### 11. `explore_midi`
+## 14. `score_to_abc`
 
 ```python
-def explore_midi(midi_files: list[str]) -> None
+def score_to_abc(score: symusic.Score) -> str
 ```
 
-- **Descripción**: Imprime en consola un diagnóstico acústico de los primeros 5 archivos encontrados: duración en segundos, total de notas, detección de percusión, números de programa instrumental y porcentaje en el registro de 88 teclas [21, 108].
-- **Parámetros**:
-  - `midi_files` (`list[str]`): Lista de rutas de archivos MIDI.
+- **Ubicación:** Parte 11 (Celda 28).
+- **Descripción:** Convierte cronológicamente las notas de un `symusic.Score` a una cadena en **notación musical ABC** estándar (con cuantización de duraciones en fracciones de negra y barras de compás `|`), utilizada por el motor `abcjs` para renderizar el pentagrama interactivo.
+- **Parámetros:**
+  - `score` (`symusic.Score`): Partitura a transcribir.
+- **Retorno:** `str` con el cuerpo ABC listo para inyectar en `ABCJS.renderAbc()`.
 
 ---
 
-### 12. `clean_data`
+## 15. `player_page`
 
 ```python
-def clean_data(midi_files: list[str]) -> list[str]
+def player_page(wav_bytes: bytes, abc_notation: str, title: str) -> str
 ```
 
-- **Descripción**: Filtra el dataset descartando pistas de percusión, seleccionando la pista melódica de mayor densidad instrumental y aplicando los umbrales de retención: al menos 50 notas y mínimo 5 segundos de duración. Los archivos aceptados se guardan con prefijo `clean_` en `CLEAN_DATASET_DIR`.
-- **Parámetros**:
-  - `midi_files` (`list[str]`): Rutas de archivos a evaluar.
-- **Retorno**: `list[str]`: Lista de rutas de los archivos MIDI limpios guardados.
+- **Ubicación:** Parte 11 (Celda 28).
+- **Descripción:** Construye una aplicación web autocontenida (HTML5 + CSS + JavaScript + `abcjs` 6.2.2 + Web Audio API) que incrusta el audio WAV en Base64, renderiza la partitura SVG en desplazamiento horizontal continuo e ilumina en rojo cada nota de forma sincronizada con la reproducción. Guarda una copia independiente en `results/partitura_composicion_generada.html`.
+- **Parámetros:**
+  - `wav_bytes` (`bytes`): Contenido binario del archivo `.wav` sintetizado.
+  - `abc_notation` (`str`): Cadena producida por `score_to_abc()`.
+  - `title` (`str`): Título mostrado en el reproductor.
+- **Retorno:** `str` con etiqueta `<iframe>` lista para `IPython.display.HTML()`.
 
 ---
 
-### 13. `tokenize_data`
+## 16. `construir_animacion_notas`
 
 ```python
-def tokenize_data(cleaned_files: list[str]) -> tuple[list[miditok.TokSequence], miditok.REMI]
+def construir_animacion_notas(score: symusic.Score, titulo: str) -> str | None
 ```
 
-- **Descripción**: Configura e inicializa el tokenizador REMI de MidiTok y procesa cada archivo de audio limpio, convirtiéndolo en secuencias de tokens. Imprime el tamaño del vocabulario y un ejemplo del mapeo simbólico.
-- **Parámetros**:
-  - `cleaned_files` (`list[str]`): Lista de archivos limpios a procesar.
-- **Retorno**: `tuple`:
-  - `tokens_list` (`list[miditok.TokSequence]`): Lista de objetos con secuencias de tokens.
-  - `tokenizer` (`miditok.REMI`): Instancia del tokenizador utilizado.
+- **Ubicación:** Parte 11 (Celda 29).
+- **Descripción:** Genera un visualizador interactivo independiente tipo *Synthesia* en **HTML5 Canvas + Web Audio API** (`results/animacion_composicion_generada.html`). Las notas caen a velocidad constante por columnas según su altura tonal y disparan un oscilador triangular con envolvente exactamente al cruzar la línea dorada «AHORA», mostrando en vivo el nombre de la nota en español, su frecuencia en Hz y su número MIDI. Incluye selector de velocidad (`0.5×`, `1×`, `1.5×`), barra *seek* y controles de reproducción.
+- **Parámetros:**
+  - `score` (`symusic.Score`): Partitura a animar.
+  - `titulo` (`str`): Encabezado de la página HTML generada.
+- **Retorno:** `str` con el documento HTML completo, o `None` si la partitura no contiene notas.
 
 ---
 
-### 14. `analyze_stats`
+## 17. `on_generar_click` (Callback `ipywidgets`)
 
 ```python
-def analyze_stats(tokens_list: list[miditok.TokSequence]) -> list[list[int]]
+def on_generar_click(_: ipywidgets.Button) -> None
 ```
 
-- **Descripción**: Calcula y muestra por consola las métricas estadísticas de longitud de secuencias (mínimo, máximo, media) y extrae las secuencias con al menos 64 tokens utilizables para modelado de redes neuronales.
-- **Parámetros**:
-  - `tokens_list` (`list[miditok.TokSequence]`): Secuencias tokenizadas.
-- **Retorno**: `list[list[int]]`: Lista de listas de IDs de tokens utilizables.
-
----
-
-### 15. `MIDIDataset` (Clase)
-
-```python
-class MIDIDataset(torch.utils.data.Dataset)
-```
-
-Dataset ligero en PyTorch para secuencias autorregresivas.
-
-#### Métodos:
-- `__init__(self, sequences: list[list[int]], max_len: int = 256, pad_id: int = 0)`
-  - Empareja cada secuencia en pares $(X, Y)$ con ventana máxima `max_len`, rellenando con `pad_id`.
-- `__len__(self) -> int`: Retorna la longitud del conjunto de datos.
-- `__getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]`: Retorna la tupla `(x, y)` con tensores `torch.long`.
-
----
-
-### 16. `prepare_data`
-
-```python
-def prepare_data(usable_sequences: list[list[int]], pad_token_id: int) -> None
-```
-
-- **Descripción**: Realiza la partición de secuencias en subconjuntos de Entrenamiento (80%) y Validación (20%), construye el `MIDIDataset` y el `DataLoader` de PyTorch, y verifica las dimensiones y tipos de datos del primer lote autorregresivo.
-- **Parámetros**:
-  - `usable_sequences` (`list[list[int]]`): Secuencias de IDs válidas.
-  - `pad_token_id` (`int`): Identificador del token de padding.
-
----
-
-### 17. `main`
-
-```python
-def main() -> None
-```
-
-- **Descripción**: Punto de entrada principal para la ejecución secuencial en línea de comandos de las 6 fases de `flujo_procesamiento_midi_alternativa.py`.
+- **Ubicación:** Parte 11 (Celda 30).
+- **Descripción:** Manejador de eventos del **Panel de Control Interactivo DeepMidi-LSTM** (`ipywidgets`). Lee en tiempo real los widgets de pista semilla (`w_semilla`), temperatura (`w_temp`: `0.30`–`1.30`), Top-K (`w_topk`: `5`–`50`), penalización por repetición (`w_rep`: `1.00`–`1.50`) y longitud (`w_pasos`: `200`–`1500`), ejecuta `generar_musica_tokens()`, decodifica con `MidiTok`, alinea al instante `0:00`, exporta `results/composicion_interfaz_lstm.mid` y `results/composicion_interfaz_lstm.wav`, imprime las métricas objetivas con `metricas_score()` y despliega el reproductor `Audio`.

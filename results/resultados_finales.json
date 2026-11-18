@@ -1,49 +1,187 @@
 {
-  "proyecto": "DeepMidi-LSTM — Generación Musical con LSTM y REMI",
+  "proyecto": "DeepMidi-LSTM — Generación Musical Simbólica mediante Redes Neuronales Recurrentes (LSTM)",
+  "universidad": "Universidad de Guadalajara — Centro Universitario de Guadalajara (CUGDL)",
+  "plan_estudios": "Licenciatura en Inteligencia Artificial y Ciencia de Datos",
+  "curso": "Diseño, Visualización y Comprensión de Deep Neural Networks",
+  "profesor": "Heriberto Zapata Solano",
   "autor": "Roberto Alejandro Chagra Martinez",
   "codigo_estudiante": "208447128",
   "dataset": {
-    "origen": "Corpus MIDI estructurado en Google Drive (examples/)",
-    "archivos_totales_descubiertos": 21,
-    "canciones_seleccionadas": 20,
-    "canciones_limpias_conservadas": 20,
-    "canciones_descartadas": 0,
-    "secuencias_utilizables_entrenamiento": 20
+    "origen": "Corpus MIDI estructurado (examples/)",
+    "generos_identificados": 11,
+    "distribucion_generos": {
+      "Pop": 323,
+      "Rock": 257,
+      "Electronic": 47,
+      "New Age": 37,
+      "Classical": 19,
+      "R&B - Soul": 14,
+      "Folk Rock": 13,
+      "Reggae": 12,
+      "Soundtracks": 10,
+      "Latin": 9,
+      "Hip-Hop": 7
+    },
+    "artistas_subcarpetas": 81,
+    "archivos_totales_descubiertos": 748,
+    "archivos_legibles": 739,
+    "archivos_corruptos": 9,
+    "multipista": 732,
+    "monopista": 7,
+    "con_percusion": 674,
+    "sin_percusion": 65,
+    "con_mas_de_un_instrumento": 708,
+    "duracion_min_s": 16.33,
+    "duracion_mediana_s": 230.36,
+    "duracion_media_s": 238.55,
+    "duracion_max_s": 1548.53,
+    "notas_total_corpus": 3803835,
+    "notas_media_obra": 5147.27,
+    "pct_en_rango_piano_promedio": 99.92,
+    "top_instrumentos": {
+      "Acoustic Grand Piano": 347,
+      "Electric Bass (finger)": 262,
+      "String Ensemble 1": 253,
+      "Acoustic Guitar (steel)": 186,
+      "Overdriven Guitar": 175,
+      "Choir Aahs": 173,
+      "Fretless Bass": 172,
+      "Electric Guitar (clean)": 154,
+      "Distortion Guitar": 133,
+      "String Ensemble 2": 120
+    },
+    "canciones_limpias_conservadas": 703,
+    "seleccionadas_por_piano": 504,
+    "seleccionadas_por_densidad_fallback": 199,
+    "canciones_descartadas": 45,
+    "motivos_descarte": {
+      "Cantidad de notas insuficiente": 33,
+      "Archivo corrupto o ilegible": 9,
+      "Demasiadas notas fuera del rango 21-108": 3
+    },
+    "secuencias_utilizables_entrenamiento": 703
   },
   "tokenizacion": {
     "formato": "REMI (Revamped MIDI)",
     "tamano_vocabulario": 435,
     "pad_token_id": 0,
-    "longitud_promedio_tokens": 3140.35
+    "tokens_especiales": [
+      "PAD_None",
+      "BOS_None",
+      "EOS_None",
+      "MASK_None"
+    ],
+    "longitud_min_tokens": 227,
+    "longitud_max_tokens": 25195,
+    "longitud_promedio_tokens": 3653.85,
+    "longitud_mediana_tokens": 3094.0,
+    "longitud_std_tokens": 2662.31,
+    "longitud_p95_tokens": 8334.5
   },
-  "entrenamiento": {
-    "arquitectura": "MusicLM (Embedding 256 + 2x LSTM 512 + Dropout 0.2 + FC)",
-    "mejor_epoca": 12,
-    "mejor_val_loss": 3.2583,
-    "train_loss_final": 1.842,
-    "dispositivo": "cuda"
+  "preparacion_lstm": {
+    "canciones_train": 562,
+    "canciones_val": 141,
+    "ventanas_train": 15608,
+    "ventanas_val": 4104,
+    "dimension_lote": [
+      32,
+      255
+    ],
+    "dtype": "torch.int64"
+  },
+  "modelo_e_hiperparametros": {
+    "arquitectura": "MusicLM (Embedding 256 + 2x LSTM 512 + Dropout 0.2 + FC 435)",
+    "parametros_embedding": 111360,
+    "parametros_lstm": 3678208,
+    "parametros_fc": 223155,
+    "parametros_entrenables": 4012723,
+    "hiperparametros": {
+      "embedding_dim": 256,
+      "hidden_dim": 512,
+      "num_layers": 2,
+      "dropout": 0.2,
+      "batch_size": 32,
+      "max_len": 256,
+      "stride": 128,
+      "epochs": 30,
+      "patience": 5,
+      "learning_rate": 0.001,
+      "weight_decay": 0.0001,
+      "grad_clip": 1.0,
+      "scheduler_factor": 0.5,
+      "scheduler_patience": 2,
+      "pasos_a_generar": 1300,
+      "temperatura": 0.72,
+      "top_k": 15,
+      "repetition_penalty": 1.18,
+      "ventana_repeticion": 32
+    }
+  },
+  "entrenamiento_y_metricas": {
+    "epocas_totales_ejecutadas": 8,
+    "mejor_epoca": 3,
+    "mejor_val_loss": 1.7945,
+    "val_perplexity": 6.02,
+    "train_loss_en_mejor_epoca": 1.4208,
+    "train_perplexity": 4.14,
+    "historial": {
+      "train_loss": [
+        2.759054276834446,
+        1.7368542513194785,
+        1.4207782367753226,
+        1.2558401272518094,
+        1.1491500835795088,
+        1.073200815155346,
+        0.99160133301448,
+        0.9569047159075675
+      ],
+      "val_loss": [
+        2.1462122896726137,
+        1.869208663992482,
+        1.7945303036223146,
+        1.7958177634847095,
+        1.8038119396038688,
+        1.8282205665785434,
+        1.8385650584107487,
+        1.8532219297937018
+      ]
+    },
+    "dispositivo_ejecucion_actual": "cuda"
   },
   "generacion": {
-    "pasos_generados": 1500,
-    "temperatura": 0.68,
+    "semilla_archivo": "clean_O sole mio.mid",
+    "semilla_tokens": 32,
+    "pasos_generados": 1300,
+    "temperatura": 0.72,
     "top_k": 15,
-    "repetition_penalty": 1.2,
+    "repetition_penalty": 1.18,
+    "ventana_repeticion": 32,
     "total_tokens_generados": 1332,
     "metricas_generada": {
-      "n_notas": 374,
-      "duracion_s": 82.06,
-      "pitch_min": 47,
-      "pitch_max": 82,
-      "pitch_promedio": 61.84,
-      "notas_por_segundo": 4.56,
-      "duracion_nota_promedio_s": 0.559,
-      "notas_por_compas": 9.55
+      "n_notas": 348,
+      "duracion_s": 164.23,
+      "pitch_min": 41,
+      "pitch_max": 72,
+      "pitch_promedio": 60.88,
+      "notas_por_segundo": 2.12,
+      "duracion_nota_promedio_s": 0.406,
+      "notas_por_compas": 5.04
+    },
+    "metricas_reales_validacion_promedio": {
+      "n_obras_evaluadas": 141,
+      "pitch_min": 43.34,
+      "pitch_max": 75.93,
+      "pitch_promedio": 60.16,
+      "notas_por_segundo": 4.5,
+      "duracion_nota_promedio_s": 0.561,
+      "notas_por_compas": 9.98
     }
   },
   "archivos_generados": {
-    "composicion_midi": "/content/drive/MyDrive/Drive.alumno.udg.mx/Proyectos/Proyecto_MIDI/results/mi_primera_composicion_ia_remi.mid",
-    "audio_wav": "/content/drive/MyDrive/Drive.alumno.udg.mx/Proyectos/Proyecto_MIDI/results/mi_primera_composicion_ia_remi.wav",
-    "animacion_html": "/content/drive/MyDrive/Drive.alumno.udg.mx/Proyectos/Proyecto_MIDI/results/animacion_composicion_generada.html",
-    "checkpoint": "/content/drive/MyDrive/Drive.alumno.udg.mx/Proyectos/Proyecto_MIDI/results/parte7_mejor_modelo.pt"
+    "composicion_midi": "/content/drive/MyDrive/Drive.alumno.udg.mx/Proyectos/DeepMidi_LSTM_Generacion_Musical/results/mi_primera_composicion_ia_remi.mid",
+    "audio_wav": "/content/drive/MyDrive/Drive.alumno.udg.mx/Proyectos/DeepMidi_LSTM_Generacion_Musical/results/mi_primera_composicion_ia_remi.wav",
+    "partitura_html": "/content/drive/MyDrive/Drive.alumno.udg.mx/Proyectos/DeepMidi_LSTM_Generacion_Musical/results/partitura_composicion_generada.html",
+    "animacion_html": "/content/drive/MyDrive/Drive.alumno.udg.mx/Proyectos/DeepMidi_LSTM_Generacion_Musical/results/animacion_composicion_generada.html",
+    "checkpoint": "/content/drive/MyDrive/Drive.alumno.udg.mx/Proyectos/DeepMidi_LSTM_Generacion_Musical/results/parte7_mejor_modelo.pt"
   }
 }
